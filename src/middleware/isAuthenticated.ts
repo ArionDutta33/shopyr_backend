@@ -21,7 +21,6 @@ export const isAuthenticated = async (
 
     const decoded = jwt.verify(token, "secret");
     (req as any).user = decoded;
-
     next();
   } catch (error) {
     next(

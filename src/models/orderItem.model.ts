@@ -4,6 +4,7 @@ export interface TOrderItem {
   product: mongoose.Schema.Types.ObjectId;
   price: number;
   quantity: number;
+  size: string;
   order: mongoose.Schema.Types.ObjectId;
 }
 const orderItemSchema = new mongoose.Schema<TOrderItem>({
@@ -18,6 +19,9 @@ const orderItemSchema = new mongoose.Schema<TOrderItem>({
   },
   quantity: {
     type: Number,
+  },
+  size: {
+    type: String,
   },
   order: {
     type: mongoose.Schema.Types.ObjectId,

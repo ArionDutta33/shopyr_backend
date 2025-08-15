@@ -90,7 +90,7 @@ export const login = async (
     }
     const payload = {
       userId: existingUser.id,
-      username: existingUser.email,
+      email: existingUser.email,
       role: existingUser.role,
     };
     const authToken = await jwt.sign(payload, "secret", { expiresIn: "1h" });
