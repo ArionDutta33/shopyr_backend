@@ -10,7 +10,8 @@ import Redis from "ioredis";
 import { generateOTP } from "../services/otpService";
 import { sendMail } from "../services/mailService";
 import { generateOtpEmail } from "../utils/generateOtpEmail";
-const redis = new Redis();
+import { redis } from "../services/redisService";
+
 export const registerUser = async (
   req: Request,
   res: Response,
@@ -93,11 +94,14 @@ export const login = async (
       email: existingUser.email,
       role: existingUser.role,
     };
-    const authToken = await jwt.sign(payload, "secret", { expiresIn: "1h" });
+    const authToken = jwt.sign(payload, "secret", { expiresIn: "1h" });
+    const response = { authToken: authToken, email: existingUser.email };
     return res
       .status(CODES.OK)
-      .json(new ApiResponse(CODES.OK, authToken, "Loggin success!"));
-  } catch (error) {}
+      .json(new ApiResponse(CODES.OK, response, "Loggin success!"));
+  } catch (error) {
+    next(error);
+  }
 };
 export const requestOtp = async (
   req: Request,

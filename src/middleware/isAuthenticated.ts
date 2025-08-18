@@ -21,8 +21,12 @@ export const isAuthenticated = async (
 
     const decoded = jwt.verify(token, "secret");
     (req as any).user = decoded;
+    console.log("inininininininin");
+
     next();
   } catch (error) {
+    console.log("error", error);
+
     next(
       error instanceof ApiError
         ? error

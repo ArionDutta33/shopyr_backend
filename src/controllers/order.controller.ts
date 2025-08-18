@@ -1,15 +1,22 @@
 import { Response, Request, NextFunction } from "express";
 import { ApiError } from "../utils/ApiError";
 import { CODES } from "../utils/ErrorCodes";
-import OrderItem from "../models/orderItem.model";
-import Order from "../models/order.model";
+import OrderItem, { TOrderItem } from "../models/orderItem.model";
+import Order, { TOrder } from "../models/order.model";
 import Product from "../models/product.model";
 import { ApiResponse } from "../utils/ApiResponse";
-
-interface AuthenticatedRequest extends Request {
+import crypto from "crypto";
+import Razorpay from "razorpay";
+import mongoose, { ObjectId, Schema, Types } from "mongoose";
+import { log } from "console";
+interface AuthenticatedRequest<
+  Params = {},
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = any
+> extends Request<Params, ResBody, ReqBody, ReqQuery> {
   user?: JwtPayload;
 }
-
 interface JwtPayload {
   userId: string;
   email: string;
@@ -18,72 +25,110 @@ interface JwtPayload {
   exp: Date;
 }
 
-export const createOrder = async (
-  req: AuthenticatedRequest,
+interface CustomerOrder {
+  items: TOrderItem[];
+  address: string;
+}
+
+export const createOrderFn = async (
+  req: AuthenticatedRequest<{}, {}, CustomerOrder, {}>,
   res: Response,
   next: NextFunction
 ) => {
   try {
     const { items, address } = req.body;
-
-    // ✅ Validate request data
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return next(new ApiError(CODES.NOT_FOUND, "No products added"));
+    log(req.body);
+    const userId = req.user?.userId;
+    if (!items || items.length === 0 || !address)
+      throw new ApiError(CODES.BAD_REQUEST, "No items or no address found ");
+    let totalPrice: number = 0;
+    for (let item of items) {
+      totalPrice += item.price * item.quantity;
     }
-    if (!address) {
-      return next(new ApiError(CODES.BAD_REQUEST, "Address is required"));
-    }
-
-    // ✅ Step 1: Create the order first
-    const order = await Order.create({
-      orderItem: [],
-      user: req.user?.userId,
-      address,
-      totalPrice: 0,
+    log(totalPrice);
+    const razorpay = new Razorpay({
+      key_id: "rzp_test_R5f50c0r4v1Cis",
+      key_secret: "zVYbIMgjEMpUuDWJ7w6wbJul",
+    });
+    const razorpayOrder = await razorpay.orders.create({
+      amount: totalPrice * 100,
+      currency: "INR",
+      receipt: `order_rcpt_${Date.now()}`,
     });
 
-    let totalPrice = 0;
-    const orderItemIds: string[] = [];
-
-    // ✅ Step 2: Create order items with order ID set
-    for (const item of items) {
-      const productData = await Product.findById(item.product);
-      if (!productData) {
-        return next(
-          new ApiError(CODES.NOT_FOUND, `Product not found: ${item.product}`)
-        );
-      }
-
-      const price = productData.productPrice;
-      totalPrice += price * item.quantity;
-
+    const newOrder = await Order.create({
+      address: address,
+      orderItem: [],
+      razorpayOrderId: razorpayOrder.id,
+      status: "created",
+      user: userId,
+      totalPrice: totalPrice,
+    });
+    const orderItemIds: Types.ObjectId[] = [];
+    for (let item of items) {
       const newOrderItem = await OrderItem.create({
-        product: productData._id,
-        order: order._id,
-        price,
+        order: newOrder._id,
+        price: item.price,
+        product: item.product,
         quantity: item.quantity,
         size: item.size,
       });
-
-      orderItemIds.push(newOrderItem._id.toString());
+      orderItemIds.push(newOrderItem._id);
     }
 
-    // ✅ Step 3: Update order with items and total price
-    await Order.findByIdAndUpdate(order._id, {
-      orderItem: orderItemIds,
-      totalPrice,
-    });
-
-    // ✅ Step 4: Populate and return
-    const populatedOrder = await Order.findById(order._id).populate({
-      path: "orderItem",
-      populate: { path: "product" },
-    });
-
+    const updatedOrder = await Order.findByIdAndUpdate(
+      newOrder._id,
+      {
+        $set: {
+          orderItem: orderItemIds,
+          razorpayOrderId: razorpayOrder.id,
+          paidAt: Date.now(),
+        },
+      },
+      { new: true }
+    )
+      .populate("orderItem")
+      .populate("user");
     return res
       .status(CODES.CREATED)
-      .json(new ApiResponse(CODES.CREATED, populatedOrder, "Order created"));
+      .json(new ApiResponse(CODES.CREATED, updatedOrder, "Order created"));
   } catch (error) {
     next(error);
+  }
+};
+
+export const verifyPayment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      req.body;
+
+    const hmac = crypto.createHmac("sha256", "zVYbIMgjEMpUuDWJ7w6wbJul");
+    hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
+    const generatedSignature = hmac.digest("hex");
+
+    if (generatedSignature === razorpay_signature) {
+      // ✅ Payment verified successfully
+      await Order.findOneAndUpdate(
+        { razorpayOrderId: razorpay_order_id },
+        {
+          status: "paid",
+          razorpayPaymentId: razorpay_payment_id,
+          paidAt: new Date(),
+        }
+      );
+
+      return res.json({ success: true });
+    } else {
+      return res
+        .status(400)
+        .json({ success: false, error: "Signature mismatch" });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: "Verification failed" });
   }
 };
