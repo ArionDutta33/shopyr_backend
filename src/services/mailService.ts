@@ -1,11 +1,13 @@
 import nodemailer from "nodemailer";
-console.log(process.env.GMAIL_USER);
-console.log(process.env.GOOGLE_APP_PASSWORD);
+
+if (!process.env.GOOGLE_APP_PASSWORD) {
+  throw new Error("No env loaded");
+}
 export const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: "ariondutta33@gmail.com",
-    pass: "ftshbsswzmoyjcfr",
+    user: process.env.GMAIL_USER,
+    pass: process.env.GOOGLE_APP_PASSWORD,
   },
 });
 export const sendMail = async (to: string, subject: string, body: string) => {

@@ -1,5 +1,4 @@
 import express, { NextFunction, type Request, type Response } from "express";
-import dotenv from "dotenv";
 import userRoutes from "./routes/user.route";
 import productRoutes from "./routes/product.route";
 import orderRoutes from "./routes/order.route";
@@ -7,7 +6,7 @@ import morgan from "morgan";
 import { connectDB } from "./utils/connect";
 import { errorMiddleware } from "./middleware/errorHandler";
 import Order from "./models/order.model";
-dotenv.config();
+import path from "path";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;

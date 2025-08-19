@@ -2,12 +2,11 @@ import { Response, Request, NextFunction } from "express";
 import { ApiError } from "../utils/ApiError";
 import { CODES } from "../utils/ErrorCodes";
 import OrderItem, { TOrderItem } from "../models/orderItem.model";
-import Order, { TOrder } from "../models/order.model";
-import Product from "../models/product.model";
+import Order from "../models/order.model";
 import { ApiResponse } from "../utils/ApiResponse";
 import crypto from "crypto";
 import Razorpay from "razorpay";
-import mongoose, { ObjectId, Schema, Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { log } from "console";
 interface AuthenticatedRequest<
   Params = {},
@@ -47,11 +46,11 @@ export const createOrderFn = async (
     }
     log(totalPrice);
     const razorpay = new Razorpay({
-      key_id: "rzp_test_R5f50c0r4v1Cis",
-      key_secret: "zVYbIMgjEMpUuDWJ7w6wbJul",
+      key_id: process.env.RAZORPAY_KEY_ID!,
+      key_secret: process.env.RAZORPAY_KEY_SECRET!,
     });
     const razorpayOrder = await razorpay.orders.create({
-      amount: totalPrice * 100,
+      amount: Math.round(totalPrice * 100),
       currency: "INR",
       receipt: `order_rcpt_${Date.now()}`,
     });
@@ -82,7 +81,6 @@ export const createOrderFn = async (
         $set: {
           orderItem: orderItemIds,
           razorpayOrderId: razorpayOrder.id,
-          paidAt: Date.now(),
         },
       },
       { new: true }
@@ -93,6 +91,8 @@ export const createOrderFn = async (
       .status(CODES.CREATED)
       .json(new ApiResponse(CODES.CREATED, updatedOrder, "Order created"));
   } catch (error) {
+    console.log("error->", error);
+
     next(error);
   }
 };
@@ -111,7 +111,6 @@ export const verifyPayment = async (
     const generatedSignature = hmac.digest("hex");
 
     if (generatedSignature === razorpay_signature) {
-      // ✅ Payment verified successfully
       await Order.findOneAndUpdate(
         { razorpayOrderId: razorpay_order_id },
         {
@@ -132,3 +131,8 @@ export const verifyPayment = async (
     res.status(500).json({ success: false, error: "Verification failed" });
   }
 };
+export const getOrderById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {};

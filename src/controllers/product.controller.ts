@@ -76,3 +76,28 @@ export const getCartProducts = async (
     next(error);
   }
 };
+export const searchProduct = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { query } = req.query;
+    log(query);
+    const productByQeury = await Product.aggregate([
+      {
+        $match: {
+          productName: {
+            $regex: query,
+            $options: "i",
+          },
+        },
+      },
+    ]);
+    if (!productByQeury || productByQeury.length === 0)
+      throw new ApiError(CODES.NOT_FOUND, "Product not found");
+    return res.send(productByQeury);
+  } catch (error) {
+    next(error);
+  }
+};

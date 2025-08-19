@@ -75,6 +75,8 @@ export const login = async (
   res: Response,
   next: NextFunction
 ) => {
+  console.log("login");
+
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -100,6 +102,8 @@ export const login = async (
       .status(CODES.OK)
       .json(new ApiResponse(CODES.OK, response, "Loggin success!"));
   } catch (error) {
+    console.log(error);
+
     next(error);
   }
 };

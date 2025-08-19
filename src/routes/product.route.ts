@@ -3,10 +3,12 @@ import {
   getAllProducts,
   getCartProducts,
   getProductById,
+  searchProduct,
 } from "../controllers/product.controller";
 import { isAuthenticated } from "../middleware/isAuthenticated";
 const router = Router();
 router.get("/", getAllProducts);
+router.get("/search", searchProduct);
 router.get("/ids", isAuthenticated, getCartProducts);
 router.get("/:id", getProductById);
 export default router;
